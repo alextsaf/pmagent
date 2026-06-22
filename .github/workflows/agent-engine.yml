@@ -1,0 +1,85 @@
+# Reusable engine workflow. Consuming repos call this via `uses:` (see
+# templates/agent.yml). All pipeline logic lives in scripts/run_agent.sh so the
+# multi-phase, no-memory-reviewer design is preserved (vs a single black-box action).
+name: pmagent-engine
+
+on:
+  workflow_call:
+    inputs:
+      ticket:
+        description: "Ticket id / issue number to implement"
+        required: false
+        type: string
+    secrets:
+      # Provide ONE of these in the consuming repo (Settings → Secrets):
+      ANTHROPIC_API_KEY:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+
+# Serialize all pmagent runs in a repo: every Claude call (implement + reviewers)
+# shares one Max subscription quota, so we must NOT fan out tickets in parallel.
+# cancel-in-progress:false = let an in-flight ticket finish; the next queues.
+# NOTE: GitHub keeps only ONE queued run per group — if you mark several tickets
+# spec-ready at once, re-trigger any that get dropped (workflow_dispatch). With
+# interactive, one-at-a-time dispatch this is rarely hit.
+concurrency:
+  group: pmagent-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # branch + commit
+      pull-requests: write   # open PR
+      issues: write          # comment + relabel for escalation
+    steps:
+      - name: Checkout consuming repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # full history for branch diffs
+
+      - name: Checkout pmagent engine (roles + scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: alextsaf/pmagent
+          ref: main          # pin to a tag/SHA once stable
+          path: .pmagent-engine
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code CLI + yq + jq
+        run: |
+          npm i -g @anthropic-ai/claude-code
+          # jq is preinstalled on ubuntu-latest; ensure it for usage/cost parsing.
+          jq --version || sudo apt-get update && sudo apt-get install -y jq
+          sudo snap install yq || sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+            && sudo chmod +x /usr/local/bin/yq
+
+      - name: Project install
+        run: |
+          INSTALL=$(yq '.stack.install_cmd' pmagent.config.yml)
+          [ "$INSTALL" != "null" ] && eval "$INSTALL" || echo "no install_cmd"
+
+      - name: Generate codemap
+        run: bash .pmagent-engine/scripts/codemap.sh || echo "codemap skipped"
+
+      - name: Run pmagent pipeline
+        env:
+          # SUBSCRIPTION billing (default): authenticate with an OAuth token from
+          # `claude setup-token`. This bills your Claude (Max) plan, not API credits.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # METERED billing (overflow only): to use pay-as-you-go API credits
+          # instead, set the ANTHROPIC_API_KEY secret and uncomment the next line.
+          # An EMPTY ANTHROPIC_API_KEY still wins over the OAuth token, so it must
+          # stay unset for subscription billing — do not pass it unconditionally.
+          # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PMAGENT_TICKET: ${{ inputs.ticket }}
+          PMAGENT_ENGINE: ${{ github.workspace }}/.pmagent-engine
+        run: bash .pmagent-engine/scripts/run_agent.sh

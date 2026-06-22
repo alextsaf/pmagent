@@ -1,0 +1,42 @@
+# pmagent per-repo config — the ONLY file most repos need to customize.
+# This is the swappable surface. Change tools here, not in the engine.
+version: 1
+
+project:
+  name: my-app
+  description: One-line description of what this project is.
+
+# Anti-corruption layer: which external tool backs each canonical artifact.
+# Adapters in the engine translate these into specs/. Swap freely.
+tools:
+  prd: local        # local | notion | clickup        (source of the PRD)
+  tickets: github   # github | clickup | linear        (source of tickets)
+  notify: github    # github | slack | email           (where escalations go)
+
+stack:
+  language: typescript
+  package_manager: pnpm
+  install_cmd: "pnpm install --frozen-lockfile"
+  lint_cmd: "pnpm lint"
+  build_cmd: "pnpm build"
+  test_cmd: "pnpm test:e2e"   # MUST be a realistic e2e run, not unit-only
+
+codemap:
+  provider: aider   # aider | none   (repo graph generator; see scripts/codemap.sh)
+
+review:
+  rounds_max: 3     # max fix<->review loops before escalating
+  reviewers: 2      # independent no-memory reviewers per round
+
+agent:
+  # Model ids are NOT hardcoded in the engine — set them here.
+  techlead_model: claude-opus-4-8
+  implementer_model: claude-sonnet-4-6
+  reviewer_model: claude-sonnet-4-6
+  max_turns: 12
+  implement_attempts: 3   # times the implementer retries to make gates green
+                          # before escalating to needs-human (failure fed back each try)
+
+limits:
+  max_files_changed: 40          # over this, force needs-human review
+  require_human_over_loc: 400    # diffs larger than this always escalate

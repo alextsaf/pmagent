@@ -1,0 +1,27 @@
+# Drop this at .github/workflows/agent.yml in EACH consuming repo.
+# It is intentionally thin — all logic lives in the reusable engine workflow.
+name: pmagent
+
+on:
+  # Dispatch is a human decision: you + the Architect mark a ticket spec-ready
+  # in-session, and that label IS the trigger. No cron/loop needed in v1.
+  issues:
+    types: [labeled]
+  # Manual kick for testing / re-running a ticket.
+  workflow_dispatch:
+    inputs:
+      ticket:
+        description: "Ticket id / issue number to run"
+        required: false
+
+jobs:
+  run:
+    # Only act on the spec-ready label (for the labeled event).
+    if: >
+      github.event_name != 'issues' ||
+      github.event.label.name == 'spec-ready'
+    # Pin the engine to a tag/SHA for reproducibility once stable.
+    uses: alextsaf/pmagent/.github/workflows/agent-engine.yml@main
+    secrets: inherit
+    with:
+      ticket: ${{ github.event.inputs.ticket || github.event.issue.number }}
