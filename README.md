@@ -16,15 +16,29 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and build milestones.
   - `pmagent.config.yml` → the only file you customize per project
   - `specs/` → canonical, in-repo PRD + tickets (the agents' contract)
 
-## Adopt it in a repo (M1 spine)
+## Adopt it in a repo — one command
 
-1. Copy `templates/agent.yml` → `<repo>/.github/workflows/agent.yml`
-   and `templates/pmagent.config.yml` → `<repo>/pmagent.config.yml`; edit config.
-2. Copy `templates/specs/` → `<repo>/specs/` and write one real ticket.
-3. Add a repo secret: `ANTHROPIC_API_KEY` **or** `CLAUDE_CODE_OAUTH_TOKEN`.
-4. Create GitHub issue labels: `spec-ready`, `in-progress`, `in-review`,
-   `needs-human`, `done`.
-5. Open an issue, attach the `spec-ready` label → the pipeline runs and opens a PR.
+From inside the target repo:
+
+```bash
+cd /path/to/your-repo
+~/Desktop/Projects/pmagent/scripts/adopt.sh
+```
+
+`adopt.sh` drops in the caller workflow + config + specs, creates the 5 labels,
+sets the Actions permissions (token write + allow PR creation), and sets the
+`CLAUDE_CODE_OAUTH_TOKEN` secret **cleanly** (no trailing newline — the cause of
+"401 Invalid bearer token"). It's idempotent and won't clobber an existing
+config/specs. Then:
+
+1. Edit `pmagent.config.yml` (`test_cmd` must be a realistic e2e run).
+2. Commit the new files and push.
+3. Open a ticket issue → add the `spec-ready` label (or `gh workflow run
+   agent.yml -f ticket=<issue#>`) → the pipeline runs and opens a PR.
+
+> Auth: the secret must be a `claude setup-token` OAuth token to bill your
+> subscription. Generate with `claude setup-token`; **don't** set
+> `ANTHROPIC_API_KEY` unless you want metered API billing.
 
 ## State machine
 
