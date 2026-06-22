@@ -35,12 +35,16 @@ PERM='--permission-mode acceptEdits'   # TODO: confirm correct CI value
 # claude_run <role_file> <allowed_tools> <model> <task_prompt>  -> stdout
 claude_run() {
   local role="$1" tools="$2" model="$3" task="$4"
+  # NOTE: do NOT add --bare here. --bare forces auth to be "strictly
+  # ANTHROPIC_API_KEY" and IGNORES the CLAUDE_CODE_OAUTH_TOKEN subscription token,
+  # which makes every call fail with "Not logged in". A fresh CI runner has no
+  # hooks/plugins/MCP to skip anyway, so --bare buys us nothing here.
   claude -p "$task" \
     --append-system-prompt "$(cat "$ENGINE/roles/$role")" \
     --allowedTools "$tools" \
     --model "$model" \
     --max-turns "$MAX_TURNS" \
-    $PERM --bare --output-format json
+    $PERM --output-format json
 }
 
 # ---- cost accounting + work evidence ----------------------------------------
