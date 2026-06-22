@@ -54,12 +54,14 @@ jobs:
 
       - name: Install Claude Code CLI + yq + jq
         run: |
+          set -e
           npm i -g @anthropic-ai/claude-code
-          # jq is preinstalled on ubuntu-latest; ensure it for usage/cost parsing.
-          jq --version || sudo apt-get update && sudo apt-get install -y jq
-          sudo snap install yq || sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
-            && sudo chmod +x /usr/local/bin/yq
+          # jq parses Claude usage/cost; ensure it (preinstalled on ubuntu-latest).
+          command -v jq >/dev/null || { sudo apt-get update && sudo apt-get install -y jq; }
+          # yq parses pmagent.config.yml. Fetch the static binary directly — no snap.
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Project install
         run: |
