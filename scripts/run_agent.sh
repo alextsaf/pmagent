@@ -12,6 +12,13 @@ CFG="pmagent.config.yml"
 ESC=".pmagent/escalation.md"
 mkdir -p .pmagent
 
+# Defensive: a trailing newline/space in the CLAUDE_CODE_OAUTH_TOKEN secret makes
+# the API reject it as "401 Invalid bearer token". Strip whitespace if present.
+# (Tokens contain no internal whitespace, so this is safe.)
+if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+  export CLAUDE_CODE_OAUTH_TOKEN="$(printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN" | tr -d '[:space:]')"
+fi
+
 # ---- config helpers ---------------------------------------------------------
 cfg() { yq -r "$1" "$CFG"; }
 TICKET="${PMAGENT_TICKET:?ticket id/issue number required}"
