@@ -16,6 +16,13 @@ on:
 
 jobs:
   run:
+    # Must grant >= what the reusable engine job requests, or the run fails at
+    # startup (the repo default GITHUB_TOKEN is read-only). Also enable
+    # Settings → Actions → "Allow GitHub Actions to create and approve PRs".
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     # Only act on the spec-ready label (for the labeled event).
     if: >
       github.event_name != 'issues' ||
