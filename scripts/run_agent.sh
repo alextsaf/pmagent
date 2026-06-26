@@ -176,10 +176,12 @@ implement_until_green() {
     record_usage "$label#$attempt" "$IMPL_MODEL" ".pmagent/impl-$label-$attempt.json"
     [ -f "$ESC" ] && escalate "Implementer reported a blocker during '$label'."
     if verify_gates; then
-      # Orchestrator commits the implementer's work-tree edits onto the branch,
-      # excluding pmagent's own runtime artifacts (the engine checkout is a nested
-      # repo that would otherwise be committed as a submodule gitlink, etc.).
-      git add -A -- ':!.pmagent-engine' ':!.pmagent' ':!codemap' ':!.aider*'
+      # Orchestrator commits the implementer's work-tree edits onto the branch.
+      # Stage everything, then unstage pmagent's own runtime artifacts (the engine
+      # checkout is a nested repo that would otherwise commit as a submodule
+      # gitlink). reset on an unstaged/ignored path is a harmless no-op.
+      git add -A
+      git reset -q -- .pmagent-engine .pmagent codemap .aider 2>/dev/null || true
       git diff --cached --quiet || git commit -q -m "pmagent($label): ticket $TICKET"
       echo "Gates green ($label, attempt $attempt)."; return 0
     fi

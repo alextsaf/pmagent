@@ -14,6 +14,10 @@ case "$PROVIDER" in
     pip install -q aider-chat || true
     aider --show-repo-map > codemap/repomap.txt 2>/dev/null || \
       echo "aider repo-map unavailable; see fallback below" > codemap/repomap.txt
+    # aider pollutes the work tree (.aider* artifacts, a .gitignore edit). Undo it
+    # so it never lands in a ticket's PR.
+    rm -rf .aider* 2>/dev/null || true
+    git checkout -- .gitignore 2>/dev/null || true
     ;;
   none|null|"")
     # Fallback: a lightweight structural map so the agents aren't blind.
