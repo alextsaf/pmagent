@@ -189,6 +189,16 @@ $(tail -c 4000 "$GATE_LOG")"
 $(tail -c 1500 "$GATE_LOG")"
 }
 
+# ---- auth preflight: fail fast & clearly on bad credentials -----------------
+# A bad/truncated token otherwise wastes the whole run and reports a misleading
+# "reviewer still requesting changes". Probe once; surface token length + error.
+echo "==> Auth preflight (CLAUDE_CODE_OAUTH_TOKEN length=${#CLAUDE_CODE_OAUTH_TOKEN}, ANTHROPIC_API_KEY set=${ANTHROPIC_API_KEY:+yes})"
+PROBE="$(claude -p "reply with the single word OK" --max-turns 1 --output-format json 2>&1 || true)"
+if printf '%s' "$PROBE" | grep -qiE 'invalid bearer|not logged in|please run /login|authenticat'; then
+  escalate "Auth preflight failed (token length ${#CLAUDE_CODE_OAUTH_TOKEN}): $(printf '%s' "$PROBE" | tr -d '\n' | head -c 240)"
+fi
+echo "Auth OK."
+
 # ---- phase 0: claim ticket --------------------------------------------------
 gh issue edit "$TICKET" --add-label in-progress --remove-label spec-ready || true
 TICKET_FILE="specs/tickets/TICKET-${TICKET}.md"
