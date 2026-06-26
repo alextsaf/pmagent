@@ -176,6 +176,9 @@ implement_until_green() {
     record_usage "$label#$attempt" "$IMPL_MODEL" ".pmagent/impl-$label-$attempt.json"
     [ -f "$ESC" ] && escalate "Implementer reported a blocker during '$label'."
     if verify_gates; then
+      # Orchestrator commits the implementer's work-tree edits onto the branch.
+      git add -A
+      git diff --cached --quiet || git commit -q -m "pmagent($label): ticket $TICKET"
       echo "Gates green ($label, attempt $attempt)."; return 0
     fi
     echo "Gates red ($label, attempt $attempt) — feeding failures back to implementer."
@@ -204,6 +207,14 @@ gh issue edit "$TICKET" --add-label in-progress --remove-label spec-ready || tru
 TICKET_FILE="specs/tickets/TICKET-${TICKET}.md"
 [ -f "$TICKET_FILE" ] || TICKET_FILE="$(ls specs/tickets/ 2>/dev/null | head -1)"
 
+# The ORCHESTRATOR owns all git (the CI runner has no identity, and we don't want
+# to depend on the implementer running git correctly). Set identity + branch here;
+# the implementer only edits files, and we commit after each green gate.
+git config user.email "pmagent-bot@users.noreply.github.com"
+git config user.name "pmagent"
+BRANCH="pmagent/${TICKET}"
+git checkout -B "$BRANCH"
+
 # ---- phase 1: tech-lead enrich — SAFETY NET ONLY ----------------------------
 # The Architect normally enriches tickets interactively (with you) before they're
 # marked spec-ready, so this branch should rarely fire. It only runs if a ticket
@@ -220,7 +231,7 @@ fi
 
 # ---- phase 2: implement until the e2e gate is green (retries, not instant give-up)
 implement_until_green \
-  "Implement ticket $TICKET (file: $TICKET_FILE) per your role. Create branch pmagent/${TICKET}, add a realistic e2e test, and make lint/build/e2e green. Do NOT open the PR." \
+  "Implement ticket $TICKET (file: $TICKET_FILE) per your role. Add a realistic e2e test and make lint/build/e2e green. Do NOT run any git commands (no branch/add/commit/push) and do NOT open a PR — the orchestrator handles all git. Just edit files." \
   "implement"
 post_implement_evidence   # leave a work-log comment on the issue
 
@@ -249,20 +260,28 @@ while [ "$round" -le "$ROUNDS_MAX" ]; do
   round=$((round+1))
 done
 
-# ---- phase 4: open PR, hand to human ---------------------------------------
+# ---- phase 4: push branch + open PR (surface failures, don't swallow them) ---
 echo "==> Opening PR"
-git push -u origin "pmagent/${TICKET}" || true
-PR_URL="$(gh pr create \
-  --title "pmagent: ${TICKET}" \
-  --body "Automated implementation of #${TICKET}. e2e green, reviewed by ${REV_MODEL} (no-memory). **Human merge required.**
+if [ "$(git rev-list --count "main..$BRANCH" 2>/dev/null || echo 0)" -eq 0 ]; then
+  escalate "Implementer produced no commits on $BRANCH — nothing to PR (it may have made no real change)."
+fi
+git push -u origin "$BRANCH" 2>".pmagent/push_err" \
+  || escalate "Could not push $BRANCH: $(head -c 200 .pmagent/push_err)"
+if PR_URL="$(gh pr create \
+    --title "pmagent: ${TICKET}" \
+    --body "Automated implementation of #${TICKET}. e2e green, reviewed by ${REV_MODEL} (no-memory). **Human merge required.**
 
 $(cost_report)" \
-  --base main --head "pmagent/${TICKET}" 2>/dev/null || true)"
+    --base main --head "$BRANCH" 2>".pmagent/pr_err")"; then
+  :
+else
+  escalate "PR creation failed: $(head -c 200 .pmagent/pr_err)"
+fi
 gh issue edit "$TICKET" --add-label in-review --remove-label in-progress || true
 
 # Final work-evidence comment on the issue: PR link + full cost report.
 comment "## ✅ PR opened — awaiting your merge
-${PR_URL:-（PR creation may have failed; check the run log）}
+${PR_URL}
 
 $(cost_report)"
-echo "DONE: PR opened for ticket $TICKET (${PR_URL:-no-url}), awaiting human merge."
+echo "DONE: PR opened for ticket $TICKET (${PR_URL}), awaiting human merge."

@@ -29,12 +29,13 @@ so the ticket and codemap must carry the knowledge — do not redesign the syste
 
 ## Procedure
 1. Read ticket + spec + relevant codemap entries. Restate the goal in one line.
-2. Create branch: `pmagent/<TICKET_ID>-<slug>`.
-3. Implement the change, matching surrounding code style/conventions.
-4. Add/extend a realistic e2e test that exercises the acceptance criteria.
-5. Run `lint_cmd`, `build_cmd`, `test_cmd`. Fix until all green.
-6. Commit with a clear message referencing `<TICKET_ID>`. Do NOT open the PR
-   yourself — the orchestrator does that after review passes.
+2. Implement the change, matching surrounding code style/conventions.
+3. Add/extend a realistic e2e test that exercises the acceptance criteria.
+4. Run `lint_cmd`, `build_cmd`, `test_cmd`. Fix until all green.
+
+**Do NOT touch git.** No branch, add, commit, push, or PR — the orchestrator
+already created the branch and commits your edits after the gates pass. Just
+leave your changes in the working tree.
 
 ## Escalation
 If blocked, write `.pmagent/escalation.md` with:
