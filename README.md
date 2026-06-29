@@ -36,6 +36,21 @@ config/specs. Then:
 3. Open a ticket issue → add the `spec-ready` label (or `gh workflow run
    agent.yml -f ticket=<issue#>`) → the pipeline runs and opens a PR.
 
+## Create tickets — the Architect front-half
+
+You don't hand-write tickets. The **`pmagent-architect`** skill (interactive, in a
+local Claude Code session) turns a feature idea into detailed, spec-ready tickets:
+it reads the codemap, clarifies scope with you, drafts the `specs/tickets/*` files,
+and on your approval opens the issues + pushes the specs via `scripts/new_ticket.sh`.
+It dispatches the autonomous pipeline only when you say so.
+
+Mechanical path (what the skill calls, also usable directly from inside a repo):
+```bash
+~/Desktop/Projects/pmagent/scripts/new_ticket.sh --title "Add X" --spec draft.md [--dispatch]
+```
+Opens the issue, writes `specs/tickets/TICKET-<issue#>.md` to the default branch,
+and (with `--dispatch`) labels it `spec-ready` to run the pipeline.
+
 > Auth: the secret must be a `claude setup-token` OAuth token to bill your
 > subscription. Generate with `claude setup-token`; **don't** set
 > `ANTHROPIC_API_KEY` unless you want metered API billing.
